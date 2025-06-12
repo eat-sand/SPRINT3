@@ -248,8 +248,6 @@ plt.show()
 # Sort the X-rays and not xrays out based on particle size
 x_rays = []
 not_xrays = []
-x_rays_cluster_number = []
-not_xrays_cluster_number = []
 
 i_cluster = 1
 
@@ -257,11 +255,8 @@ while i_cluster < len(clustered_energy):
 
     if len(clustered_energy[i_cluster]) < 5:
         x_rays.append(sum(clustered_energy[i_cluster]))
-        x_rays_cluster_number.append(i_cluster)
-
     else: 
         not_xrays.append(sum(clustered_energy[i_cluster]))
-        not_xrays_cluster_number.append(i_cluster)
     
     i_cluster += 1
 
@@ -279,8 +274,6 @@ plt.grid()
 plt.xlabel('Energy (keV)')
 plt.ylabel('Count')
 plt.show()
-
-# Graph X-rays
 
 # Set Bins
 bin_edges = np.arange((min(x_rays) - 1), (max(x_rays) + 1) , 1)
@@ -307,7 +300,7 @@ plt.xlim(left=0)
 plt.grid()
 plt.show()
 
-# Graph No X-rays
+# Graph particle greater than 5
 
 # Set Bins
 bin_edges = np.arange((min(not_xrays) - 1), (max(not_xrays) + 1) , 1)
@@ -380,7 +373,6 @@ for cluster, grade in particle_grades.items():
 
 
 # Histogram of all ACIS Grades
-
 grade_values = list(particle_grades.values())
 
 plt.figure(figsize=(15, 7))
@@ -407,7 +399,6 @@ acis_to_asca = {
     177: 5, 197: 5,
 }
 
-asca_histogram = []
 asca = {}
 standard_asca = {}
 other_asca = {}
@@ -415,7 +406,6 @@ asca_clusters = []
 
 for cluster_num, grade in particle_grades.items():
     asca_value = acis_to_asca.get(grade, 7)
-    asca_histogram.append(asca_value)
     asca[cluster_num] = asca_value
     asca_clusters.append(cluster_num)
 
@@ -423,7 +413,7 @@ standard_asca = {k: v for k, v in asca.items() if v in [0, 2, 3, 4, 6]}
 other_asca = {k: v for k, v in asca.items() if v in [1,5,7]}
 
 # ACSA Overall Count
-
+asca_histogram = list(asca.values())
 bin_edges = np.arange(-0.5, 7.5 + 1e-5, 1)
 counts, edges = np.histogram(asca_histogram, bins=bin_edges)
 bin_centers = np.arange(0, 8)
@@ -438,7 +428,6 @@ plt.ylim(0, 350)
 plt.show()
 
 # ACSA Broken Up Count
-
 fasca = list(standard_asca.values())
 bin_edges = np.arange(-0.5, 7.5 + 1e-5, 1)
 counts, edges = np.histogram(fasca, bins=bin_edges)
@@ -526,7 +515,6 @@ plt.grid()
 plt.show()
 
 # Graph Other ACSA
-
 bin_edges = np.arange((min(o_asca_e) - 1), (max(o_asca_e) + 1) , 1)
 counts, edges = np.histogram(o_asca_e, bins=bin_edges)
 bin_centers = [(edges[i] + edges[i+1]) / 2 for i in range(len(edges) - 1)]
@@ -743,7 +731,6 @@ while i < len(graph_times):
     i = j
 
 cps = np.array(cps)
-adjusted_times = np.array(adjusted_times)
 flux = cps/6.23 # CONSTANT IS SUBJECT TO CHANGE
 
 # Graph
@@ -790,7 +777,6 @@ while i < len(standard_asca_times):
     i = j
 
 asca_cps = np.array(asca_cps)
-adjusted_time2 = np.array(asca_adjusted_times)
 ascaflux = asca_cps/6.23 # CONSTANT IS SUBJECT TO CHANGE
 
 # Graph
@@ -806,6 +792,7 @@ plt.gcf().autofmt_xdate()
 plt.legend()
 plt.show()
 
+# Overlapped
 plt.figure(figsize=(15, 7))
 plt.plot(utc_times, flux, label='All Particles', color = 'purple')
 plt.plot(asca_utc_times, ascaflux, label="Standard ASCA", color = 'orange')

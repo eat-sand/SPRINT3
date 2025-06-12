@@ -54,14 +54,19 @@ def grades_hist(histenergy):
 data = np.loadtxt('co-57-20-01-2025.txt')
 data = np.array(data)
 
-# Assign each column with the appropriate values
-pixel_coords = data[:,0] # Linear Pixel Coordinates
-time_hit = data[:,1] # Time of hit in 40 MHz
-energy = data[:,3] # Energy in keV
+with open('co-57-20-01-2025.txt', 'r') as file:
+    for line in file:
+        if line.strip().startswith('# Start of measurement - unix time:'):
+            unix_str = line.strip().split(': ')[-1]
+            unix_str = float(unix_str)
+
+linear_pixel_coords = data[:,0]
+time_of_arrival = data[:,1]
+energy = data[:,3]
 
 # Adjust pixel coords
-x = pixel_coords % 256
-y = pixel_coords // 256
+x = linear_pixel_coords % 256
+y = linear_pixel_coords // 256
 
 # Graph Energy
 plt.figure(figsize=(15, 15))
@@ -73,7 +78,7 @@ plt.show()
 
 # Graph Time
 plt.figure(figsize=(15, 15))
-plt.scatter(x, y, s=10, c = time_hit)
+plt.scatter(x, y, s=10, c = time_of_arrival)
 cbar = plt.colorbar()
 cbar.set_label('Hit Time in 40MHz')
 plt.grid()
@@ -81,46 +86,46 @@ plt.show()
 
 # Clustering by time
 
-time_cluster = []
-d = 2
+timclustered_energy = []
+d = 5
 
-# List to keep track of values that have already been clustered
-visited = [False] * len(time_hit)
-cluster_index = [0.] * len(time_hit) 
+visited = [False] * len(time_of_arrival)
+cluster_index = [0.] * len(time_of_arrival) 
 
 current_cluster = 1
-# Going through the dataset
-for i in range(len(time_hit)):
+
+for i in range(len(time_of_arrival)):
     # if visited[i]:
     if cluster_index[i]:
-        continue  # Skip if already clustered
+        continue
 
-    tcluster = [time_hit[i]] 
-    minimum = time_hit[i]
-    maximum = time_hit[i]
+    tcluster = [time_of_arrival[i]] 
+    minimum = time_of_arrival[i]
+    maximum = time_of_arrival[i]
     visited[i] = True # Checked
     cluster_index[i] = current_cluster
 
-    for j in range(i + 1, len(time_hit)):
+    for j in range(i + 1, len(time_of_arrival)):
         if visited[j]:
-            continue  # Skip if already clustered
+            continue  
 
-        if abs(minimum - time_hit[j]) < d or abs(maximum - time_hit[j]) < d:
-            tcluster.append(time_hit[j])
+        if abs(minimum - time_of_arrival[j]) < d or abs(maximum - time_of_arrival[j]) < d:
+            tcluster.append(time_of_arrival[j])
             visited[j] = True  # Checked
             cluster_index[j] = current_cluster
 
-            # Update the max, min values
-            minimum = min(minimum, time_hit[j])
-            maximum = max(maximum, time_hit[j])
+            minimum = min(minimum, time_of_arrival[j])
+            maximum = max(maximum, time_of_arrival[j])
 
         else:
             break
 
-    time_cluster.append(tcluster)
+    timclustered_energy.append(tcluster)
     current_cluster += 1
 
 cluster_index = np.array(cluster_index)
+
+print(len(cluster_index))
 
 # Graph Time Clusters
 plt.figure(figsize=(15, 15))
@@ -130,32 +135,63 @@ cbar.set_label('Cluster')
 plt.grid()
 plt.show()
 
-# Energy Clustering
+# Convert clock ticks to seconds
+converted_toa = time_of_arrival / 40e6
 
-# Make a function for cluserting energy
-def cluster_energy (energy, index):
+# Cluster the UNIX, TOA and energy of each particle
+def cluster_function (values, index):
     
     cluster = defaultdict(list)
    
-    for e, c in zip(energy, index): 
-        cluster[c].append(e)
+    for v, c in zip(values, index): 
+        cluster[c].append(v)
     
     return cluster
 
-# Perform the clustering
-e_cluster = cluster_energy(energy, cluster_index)
+clustered_energy = cluster_function(energy, cluster_index)
+clustered_toa = cluster_function(converted_toa, cluster_index)
 
 # Calculate the sum of each key
 total_energy = []
 total = 1
-while total <= len(e_cluster):
-    print(f"Total energy of Cluster {total} is {sum(e_cluster[total])} keV")
-    total_energy.append(sum(e_cluster[total]))
+while total <= len(clustered_energy):
+    # print(f"Total energy of Cluster {total} is {sum(clustered_energy[total])} keV")
+    total_energy.append(sum(clustered_energy[total]))
     total += 1
 
-# Histogram
+# Time of arrival and total energy of each cluster
+time = []
+energy_summed = []
 
-# Set Bins
+for key in clustered_toa:
+        ctoa = min(clustered_toa[key])
+        ctu = ctoa + unix_str
+
+        time.append(ctu)
+
+total = 1
+while total <= len(clustered_energy):
+    energy_summed.append(sum(clustered_energy[total]))
+    total += 1
+
+# Attatch the energy and time of each cluster to each cluster
+particles = {}
+
+for idx, (e_sum, t) in enumerate(zip(energy_summed, time), start=1):
+    particles[idx] = {
+        'energy': e_sum,
+        'time arrived': t
+    }
+
+# # Print the energy and time arrived of each cluster
+# for clst, info in particles.items():
+#     print("\nCluster:", clst)
+    
+#     for key in info:
+#         print(key + ':', info[key])
+
+# Manual Histogram
+
 bin_edges = np.arange((min(total_energy) - 1), 200, 1)
 counts, edges = np.histogram(total_energy, bins=bin_edges)
 bin_centers = [(edges[i] + edges[i+1]) / 2 for i in range(len(edges) - 1)]
@@ -169,34 +205,33 @@ plt.xlabel('Energy (keV)')
 plt.ylabel('Count')
 plt.show()
 
-# Normalized
+# Normalized histogram of all particles
 bin_edges = np.histogram_bin_edges(total_energy, bins='fd')
 
 plt.figure(figsize=(15, 7))
 plt.hist(total_energy, bins=bin_edges, color='indigo', density=True)
 plt.xlabel("Energy (keV)")
 plt.ylabel("Normalized Count")
-plt.xlim(0,210)
+plt.xlim(left=0)
 plt.grid()
 plt.show()
 
-# Sort the X-rays and electrons out
-
+# Sort the X-rays and not xrays out based on particle size
 x_rays = []
 not_xrays = []
 
 i_cluster = 1
 
-while i_cluster < len(e_cluster):
+while i_cluster < len(clustered_energy):
 
-    if len(e_cluster[i_cluster]) < 4:
-        x_rays.append(sum(e_cluster[i_cluster]))
+    if len(clustered_energy[i_cluster]) < 5:
+        x_rays.append(sum(clustered_energy[i_cluster]))
     else: 
-        not_xrays.append(sum(e_cluster[i_cluster]))
+        not_xrays.append(sum(clustered_energy[i_cluster]))
     
     i_cluster += 1
 
-# Graph X-rays
+# Graph Particles Less than 5
 
 # Set Bins
 bin_edges = np.arange((min(x_rays) - 1), (max(x_rays) + 1) , 1)
@@ -220,7 +255,7 @@ plt.xlim(left=0)
 plt.grid()
 plt.show()
 
-# Graph Not XRays
+# Graph particle greater than 5
 
 # Set Bins
 bin_edges = np.arange((min(not_xrays) - 1), (max(not_xrays) + 1) , 1)
@@ -251,19 +286,15 @@ grid_values = {
     (-1, -1): 1, (0, -1): 2, (1, -1): 4
 }
 
-# Dictionary to hold the final grade for each particle cluster
 particle_grades = {}
 
-# Loop over each particle cluster number
 for cluster_num in cluster_index:
-    # Mask to get the indices of the current cluster
     cluster_mask = cluster_index == cluster_num
 
     x_vals = x[cluster_mask]
     y_vals = y[cluster_mask]
     e_vals = energy[cluster_mask]
 
-    # Find the pixel with the highest energy in the cluster
     max_idx = np.argmax(e_vals)
     x0, y0 = x_vals[max_idx], y_vals[max_idx]
 
@@ -279,16 +310,14 @@ for cluster_num in cluster_index:
             valid_cluster = False
             break
 
-    # Only store the grade if all pixels were within the 3x3 grid
     if valid_cluster:
         particle_grades[cluster_num] = grade
 
 # Print grades
-for cluster, grade in particle_grades.items():
-    print(f"Cluster {cluster}: Grade = {grade}")
+# for cluster, grade in particle_grades.items():
+#      print(f"Cluster {cluster}: Grade = {grade}")
 
 # Histogram of all ACIS Grades
-
 grade_values = list(particle_grades.values())
 
 plt.figure(figsize=(15, 7))
@@ -327,7 +356,6 @@ standard_asca = {k: v for k, v in asca.items() if v in [0, 2, 3, 4, 6]}
 other_asca = {k: v for k, v in asca.items() if v in [1,5,7]}
 
 # ACSA Overall Count
-
 asca_histogram = list(asca.values())
 bin_edges = np.arange(-0.5, 7.5 + 1e-5, 1)
 counts, edges = np.histogram(asca_histogram, bins=bin_edges)
@@ -375,17 +403,8 @@ plt.show()
 s_asca_e = []
 
 for key in standard_asca:
-    if key in e_cluster:
-        s_asca_e.append(sum(e_cluster[key]))
-
-bin = np.histogram_bin_edges(s_asca_e, bins='fd')
-plt.figure(figsize=(15, 7))
-plt.hist(s_asca_e, bins=bin, color='olivedrab')
-plt.xlabel("Energy (keV)")
-plt.ylabel("Count")
-plt.xlim(left=0)
-plt.grid()
-plt.show()
+    if key in clustered_energy:
+        s_asca_e.append(sum(clustered_energy[key]))
 
 bin_edges = np.histogram_bin_edges(s_asca_e, bins='fd')
 plt.figure(figsize=(15, 7))
@@ -396,25 +415,29 @@ plt.xlim(left=0)
 plt.grid()
 plt.show()
 
-# Energy histogram of the Other ACSA
+# Graph Standard ACSA
 
-o_asca_e = []
-
-for key in other_asca:
-    if key in e_cluster:
-        o_asca_e.append(sum(e_cluster[key]))
-
-bin_edges = np.arange((min(o_asca_e) - 1), (max(o_asca_e) + 1) , 1)
-counts, edges = np.histogram(o_asca_e, bins=bin_edges)
+# Set Bins
+bin_edges = np.arange((min(s_asca_e) - 1), (max(s_asca_e) + 1) , 1)
+counts, edges = np.histogram(s_asca_e, bins=bin_edges)
 bin_centers = [(edges[i] + edges[i+1]) / 2 for i in range(len(edges) - 1)]
 
+# Graph
 plt.figure(figsize=(15, 7))
-plt.bar(bin_centers, counts, width=1, color="dodgerblue", align="center")
+plt.bar(bin_centers, counts, width=1, color="olivedrab", align="center")
 plt.grid()
 plt.xlabel('Energy (keV)')
 plt.ylabel('Count')
 plt.xlim(left=0)
 plt.show()
+
+# Energy histogram of the Other ACSA
+
+o_asca_e = []
+
+for key in other_asca:
+    if key in clustered_energy:
+        o_asca_e.append(sum(clustered_energy[key]))
 
 bin_edges = np.histogram_bin_edges(o_asca_e, bins='fd')
 plt.figure(figsize=(15, 7))
@@ -425,12 +448,33 @@ plt.xlim(left=0)
 plt.grid()
 plt.show()
 
+# Graph Other ACSA
+bin_edges = np.arange((min(o_asca_e) - 1), (max(o_asca_e) + 1) , 1)
+counts, edges = np.histogram(o_asca_e, bins=bin_edges)
+bin_centers = [(edges[i] + edges[i+1]) / 2 for i in range(len(edges) - 1)]
+
+plt.figure(figsize=(15, 7))
+plt.bar(bin_centers, counts, width=1, color="dodgerblue", align="center")
+plt.grid()
+plt.xlabel('Energy (keV)')
+plt.ylabel('Count')
+plt.show()
+
+plt.figure(figsize=(15, 7))
+plt.bar(bin_centers, counts, width=1, color="dodgerblue", align="center")
+plt.grid()
+plt.xlabel('Energy (keV)')
+plt.ylabel('Count')
+plt.xlim(left=0)
+plt.show()
+
+# Comparison of xrays by size vs grading
 bin_edges1 = np.histogram_bin_edges(s_asca_e, bins='fd')
 bin_edges2 = np.histogram_bin_edges(x_rays, bins='fd')
 
 plt.figure(figsize=(15, 7))
 plt.hist(s_asca_e, bins=bin_edges1, density=True, color='magenta', alpha=0.5, label='Standard ASCA')
-plt.hist(x_rays, bins=bin_edges2, density=True, color='olivedrab', alpha=0.5, label='Particles less than 4 pixels')
+plt.hist(x_rays, bins=bin_edges2, density=True, color='olivedrab', alpha=0.5, label='Particles less than 5 pixels')
 plt.xlabel("Energy (keV)")
 plt.ylabel("Normalized Count")
 plt.xlim(left=0)
@@ -438,12 +482,13 @@ plt.grid()
 plt.legend()
 plt.show()
 
+# Comparison of not xrays by size vs grading
 bin_edges1 = np.histogram_bin_edges(o_asca_e, bins='fd')
 bin_edges2 = np.histogram_bin_edges(not_xrays, bins='fd')
 
 plt.figure(figsize=(15, 7))
 plt.hist(o_asca_e, bins=bin_edges1, density=True, color='magenta', alpha=0.5, label='Filtered ASCA')
-plt.hist(not_xrays, bins=bin_edges2, density=True, color='dodgerblue', alpha=0.5, label='Particles more than 4 pixels')
+plt.hist(not_xrays, bins=bin_edges2, density=True, color='dodgerblue', alpha=0.5, label='Particles more than 5 pixels')
 plt.xlabel("Energy (keV)")
 plt.ylabel("Normalized Count")
 plt.xlim(left=0)
@@ -452,7 +497,6 @@ plt.legend()
 plt.show()
 
 # Sort clusters into each ASCA grade
-
 zero = {}
 one = {}
 two = {}
@@ -463,7 +507,6 @@ six = {}
 seven = {}
 
 # Sort energies
-
 zero_energy = []
 one_energy = []
 two_energy = []
@@ -473,36 +516,35 @@ five_energy = []
 six_energy = []
 seven_energy  = []
 
-
 for key in standard_asca:
-    if key in e_cluster:
-        s_asca_e.append(sum(e_cluster[key]))
+    if key in clustered_energy:
+        s_asca_e.append(sum(clustered_energy[key]))
 
 for cluster_num, grade in asca.items():
     if grade == 0:
         zero[cluster_num] = grade
-        zero_energy.append(sum(e_cluster[cluster_num]))
+        zero_energy.append(sum(clustered_energy[cluster_num]))
     elif grade == 1:
         one[cluster_num] = grade
-        one_energy.append(sum(e_cluster[cluster_num]))
+        one_energy.append(sum(clustered_energy[cluster_num]))
     elif grade == 2:
         two[cluster_num] = grade
-        two_energy.append(sum(e_cluster[cluster_num]))
+        two_energy.append(sum(clustered_energy[cluster_num]))
     elif grade == 3:
         three[cluster_num] = grade
-        three_energy.append(sum(e_cluster[cluster_num]))
+        three_energy.append(sum(clustered_energy[cluster_num]))
     elif grade == 4:
         four[cluster_num] = grade
-        four_energy.append(sum(e_cluster[cluster_num]))
+        four_energy.append(sum(clustered_energy[cluster_num]))
     elif grade == 5:
         five[cluster_num] = grade
-        five_energy.append(sum(e_cluster[cluster_num]))
+        five_energy.append(sum(clustered_energy[cluster_num]))
     elif grade == 6:
         six[cluster_num] = grade
-        six_energy.append(sum(e_cluster[cluster_num]))
+        six_energy.append(sum(clustered_energy[cluster_num]))
     elif grade == 7:
         seven[cluster_num] = grade
-        seven_energy.append(sum(e_cluster[cluster_num]))
+        seven_energy.append(sum(clustered_energy[cluster_num]))
 
 energy_arrays = [
     (zero_energy, "Grade 0", "red"),
@@ -570,23 +612,104 @@ plt.legend()
 plt.title("Grades 1, 5, 7")
 plt.show()
 
-# Graphs of the particles in each grade
+# Flux calculation
+graph_times = [v['time arrived'] for v in particles.values()]
+graph_times = sorted(graph_times)
 
-cluster_sources = [
-    list(zero.keys())[:5],
-    list(one.keys())[:5],
-    list(two.keys())[:5],
-    list(three.keys())[:5],
-    list(four.keys())[:5],
-    list(five.keys())[:5],
-    list(six.keys())[:5],
-    list(seven.keys())[:5],
-]
+# Calculate the Counts per Second
+dtime = 50
+cps = []
+adjusted_times = []
 
-for clusters in cluster_sources:
-    for cluster_num in clusters:
-        cluster_mask = cluster_index == cluster_num
-        x_vals = x[cluster_mask]
-        y_vals = y[cluster_mask]
-        e_vals = energy[cluster_mask]
-        plot_cluster(x_vals, y_vals, e_vals, cluster_num)
+i = 0
+while i < len(graph_times):
+    group_keys = []
+    group_times = [graph_times[i]]
+    j = i + 1
+
+    while j < len(graph_times) and (graph_times[j] - graph_times[i]) < dtime:
+        group_keys.append(1)
+        group_times.append(graph_times[j])
+        j += 1
+
+    cps_value = sum(group_keys) / dtime 
+    avg_time = sum(group_times) / len(group_times)
+
+    cps.append(cps_value)
+    adjusted_times.append(avg_time)
+
+    i = j
+
+cps = np.array(cps)
+# flux = cps/6.23 # CONSTANT IS SUBJECT TO CHANGE
+
+# # Graph
+# utc_times = [datetime.utcfromtimestamp(t) for t in adjusted_times]
+
+# plt.figure(figsize=(15, 7))
+# plt.plot(utc_times, flux)
+# plt.xlabel("Time (UTC)")
+# plt.ylabel('Flux (cm$^{-2}$ s$^{-1}$ sr$^{-1}$)')
+# plt.grid()
+# plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+# plt.gcf().autofmt_xdate()
+# plt.legend()
+# plt.show()
+
+asca_standard_particles =  {
+    k: particles[k] for k in standard_asca if k in particles
+}
+
+standard_asca_times = [v['time arrived'] for v in asca_standard_particles.values()]
+standard_asca_times = sorted(standard_asca_times)
+
+dtime = 50
+asca_cps = []
+asca_adjusted_times = []
+
+i = 0
+while i < len(standard_asca_times):
+    group_keys = []
+    group_times = [standard_asca_times[i]]
+    j = i + 1
+
+    while j < len(standard_asca_times) and (standard_asca_times[j] - standard_asca_times[i]) < dtime:
+        group_keys.append(1)
+        group_times.append(standard_asca_times[j])
+        j += 1
+
+    cps_value = sum(group_keys) / dtime 
+    avg_time = sum(group_times) / len(group_times)
+
+    asca_cps.append(cps_value)
+    asca_adjusted_times.append(avg_time)
+
+    i = j
+
+asca_cps = np.array(asca_cps)
+# ascaflux = asca_cps/6.23 # CONSTANT IS SUBJECT TO CHANGE
+
+# # Graph
+# asca_utc_times = [datetime.utcfromtimestamp(t) for t in asca_adjusted_times]
+
+# plt.figure(figsize=(15, 7))
+# plt.plot(asca_utc_times, ascaflux)
+# plt.xlabel("Time (UTC)")
+# plt.ylabel('Flux (cm$^{-2}$ s$^{-1}$ sr$^{-1}$)')
+# plt.grid()
+# plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+# plt.gcf().autofmt_xdate()
+# plt.legend()
+# plt.show()
+
+# # Overlapped
+# plt.figure(figsize=(15, 7))
+# plt.plot(utc_times, flux, label='All Particles', color = 'purple')
+# plt.plot(asca_utc_times, ascaflux, label="Standard ASCA", color = 'orange')
+# plt.xlabel("Time (UTC)")
+# plt.ylabel('Flux (cm$^{-2}$ s$^{-1}$ sr$^{-1}$)')
+# plt.grid()
+# plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+# plt.gcf().autofmt_xdate()
+# plt.legend()
+# plt.show()
