@@ -4,125 +4,153 @@ import collections
 from collections import defaultdict
 import scipy.signal as sp
 
-# Open read and extract the data of the txt files
+# Load data function
 def process_files_in_folder(folder_path):
-    
     pixel_coords_list = []
-    time_hit_list = []
+    time_of_arrival_list = []
     energy_list = []
+    unix_list = []
 
     for file_name in os.listdir(folder_path):
         if file_name.endswith('.txt'):
             file_path = os.path.join(folder_path, file_name)
 
-            # Check if file is empty
             if os.stat(file_path).st_size == 0:
+                print(f"Skipping empty file: {file_name}")
                 continue
 
             try:
                 data = np.loadtxt(file_path, comments='#')
 
-                # Ensure it's a 2D array and has at least 4 columns
                 if data.ndim == 1:
-                    data = data.reshape(1, -1) 
+                    data = data.reshape(1, -1)
+
                 if data.shape[1] < 4:
+                    print(f"Skipping {file_name}: Less than 4 columns found.")
                     continue
 
-                pixel_coords_list.append(data[:, 0])  # Linear Pixel Coordinates
-                time_hit_list.append(data[:, 1])  # Time of hit in 40 MHz
-                energy_list.append(data[:, 3])  # Energy in keV
+                unix_time = None
+                with open(file_path, 'r') as file:
+                    for line in file:
+                        if line.strip().startswith('# Start of measurement - unix time: '):
+                            unix_str = line.strip().split(': ')[-1]
+                            try:
+                                unix_time = float(unix_str)
+                            except ValueError:
+                                print(f"Could not convert timestamp to float in {file_name}")
+                                unix_time = None
+                            break
+
+                pixel_coords_list.append(data[:, 0])
+                time_of_arrival_list.append(data[:, 1])
+                energy_list.append(data[:, 3])
+                if unix_time is not None:
+                    unix_list.extend([unix_time] * data.shape[0])
+                else:
+                    unix_list.extend([None] * data.shape[0])
 
             except Exception as e:
-                continue
-    
-    return pixel_coords_list, time_hit_list, energy_list
+                print(f"Error processing {file_name}: {e}")
+
+    return pixel_coords_list, time_of_arrival_list, energy_list, unix_list
 
 folder_path = r"" # INSERT FILE PATH HERE
-pixel_coords, time_hit, energy = process_files_in_folder(folder_path)
+linear_pixel_coords, time_of_arrival, energy, unix_time = process_files_in_folder(folder_path)
 
 # Convert to flat np arrays
-pixel_coords = np.concatenate(pixel_coords)
+linear_pixel_coords = np.concatenate(linear_pixel_coords)
 energy = np.concatenate(energy)
-time_hit = np.concatenate(time_hit)
+time_of_arrival = np.concatenate(time_of_arrival)
 
 # Compute x, y pixel positions
-x = pixel_coords % 256
-y = pixel_coords // 256
+x = linear_pixel_coords % 256
+y = linear_pixel_coords // 256
 
 # Clustering by time
 time_cluster = []
 
 # List to keep track of values that have already been clustered
-visited = [False] * len(time_hit)
-cluster_index = [0.] * len(time_hit) 
+timclustered_energy = []
+
+visited = [False] * len(time_of_arrival)
+cluster_index = [0.] * len(time_of_arrival) 
 
 current_cluster = 1
-for i in range(len(time_hit)):
+
+for i in range(len(time_of_arrival)):
     # if visited[i]:
     if cluster_index[i]:
-        continue  # Skip if already clustered
+        continue
 
-    tcluster = [time_hit[i]] 
-    minimum = time_hit[i]
-    maximum = time_hit[i]
+    tcluster = [time_of_arrival[i]] 
+    minimum = time_of_arrival[i]
+    maximum = time_of_arrival[i]
     visited[i] = True # Checked
     cluster_index[i] = current_cluster
 
-    for j in range(i + 1, len(time_hit)):
+    for j in range(i + 1, len(time_of_arrival)):
         if visited[j]:
-            continue  # Skip if already clustered
+            continue
 
-        if abs(minimum - time_hit[j]) < 5 or abs(maximum - time_hit[j]) < 5:
-            tcluster.append(time_hit[j])
+        if abs(minimum - time_of_arrival[j]) < 5 or abs(maximum - time_of_arrival[j]) < 5:
+            tcluster.append(time_of_arrival[j])
             visited[j] = True  # Checked
             cluster_index[j] = current_cluster
 
-            # Update the max, min values
-            minimum = min(minimum, time_hit[j])
-            maximum = max(maximum, time_hit[j])
+            minimum = min(minimum, time_of_arrival[j])
+            maximum = max(maximum, time_of_arrival[j])
 
         else:
             break
 
-    time_cluster.append(tcluster)
+    timclustered_energy.append(tcluster)
     current_cluster += 1
 
 cluster_index = np.array(cluster_index)
 
-# Energy Clustering
-def cluster_energy (energy, index):
+# Convert clock ticks to seconds
+converted_toa = time_of_arrival / 40e6
+
+# Cluster the UNIX, TOA and energy of each particle
+def cluster_function (values, index):
     
     cluster = defaultdict(list)
    
-    for e, c in zip(energy, index): 
-        cluster[c].append(e)
+    for v, c in zip(values, index): 
+        cluster[c].append(v)
     
     return cluster
 
-e_cluster = cluster_energy(energy, cluster_index)
+clustered_energy = cluster_function(energy, cluster_index)
+clustered_unix = cluster_function(unix_time, cluster_index)
+clustered_toa = cluster_function(converted_toa, cluster_index)
 
-# Calculate the sum of each key
-total_energy = []
+
+# Time of arrival and total energy of each cluster
+time = []
+energy_summed = []
+
+for key in clustered_toa:
+        ctoa = min(clustered_toa[key])
+        cunix = (clustered_unix[key])
+        cunix = cunix[0]
+        ctu = ctoa + cunix
+
+        time.append(ctu)
+
 total = 1
-while total <= len(e_cluster):
-    total_energy.append(sum(e_cluster[total]))
+while total <= len(clustered_energy):
+    energy_summed.append(sum(clustered_energy[total]))
     total += 1
 
-# Sort Out X-Rays based on cluster size
-x_rays = []
-not_xrays = []
+# Attatch the energy and time of each cluster to each cluster
+particles = {}
 
-i_cluster = 1
-
-while i_cluster < len(e_cluster):
-
-    if len(e_cluster[i_cluster]) < 5:
-        x_rays.append(sum(e_cluster[i_cluster]))
-
-    else: 
-        not_xrays.append(sum(e_cluster[i_cluster]))
-    
-    i_cluster += 1
+for idx, (e_sum, t) in enumerate(zip(energy_summed, time), start=1):
+    particles[idx] = {
+        'energy': e_sum,
+        'time arrived': t
+    }
 
 # Sorting x-rays with the Chandra x-ray ACIS grading system
 grid_values = { 
@@ -190,3 +218,32 @@ for cluster_num, grade in acis_grades.items():
 standard_asca = {k: v for k, v in asca.items() if v in [0, 2, 3, 4, 6]}
 other_asca = {k: v for k, v in asca.items() if v in [1,5,7]}
 
+# Flux calculation
+graph_times = [v['time arrived'] for v in particles.values()]
+graph_times = sorted(graph_times)
+
+# Calculate the Counts per Second
+dtime = 50
+cps = []
+adjusted_times = []
+
+i = 0
+while i < len(graph_times):
+    group_keys = []
+    group_times = [graph_times[i]]
+    j = i + 1
+
+    while j < len(graph_times) and (graph_times[j] - graph_times[i]) < dtime:
+        group_keys.append(1)
+        group_times.append(graph_times[j])
+        j += 1
+
+    cps_value = sum(group_keys) / dtime 
+    avg_time = sum(group_times) / len(group_times)
+
+    cps.append(cps_value)
+    adjusted_times.append(avg_time)
+
+    i = j
+
+cps = np.array(cps)
