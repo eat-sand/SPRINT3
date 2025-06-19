@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 import collections
 from collections import defaultdict
 import scipy.signal as sp
+from datetime import datetime
+import matplotlib.dates as mdates
 
 # Plotting a cluster on the 3x3 grid with energy and pixel coordinates
 def plot_cluster(x_vals, y_vals, e_vals, cluster_num):
@@ -615,7 +617,7 @@ graph_times = [v['time arrived'] for v in particles.values()]
 graph_times = sorted(graph_times)
 
 # Calculate the Counts per Second
-dtime = 50
+dtime = 1
 cps = []
 adjusted_times = []
 
@@ -641,18 +643,18 @@ while i < len(graph_times):
 cps = np.array(cps)
 # flux = cps/6.23 # CONSTANT IS SUBJECT TO CHANGE
 
-# # Graph
-# utc_times = [datetime.utcfromtimestamp(t) for t in adjusted_times]
+# Graph
+utc_times = [datetime.utcfromtimestamp(t) for t in adjusted_times]
 
-# plt.figure(figsize=(15, 7))
-# plt.plot(utc_times, flux)
-# plt.xlabel("Time (UTC)")
-# plt.ylabel('Flux (cm$^{-2}$ s$^{-1}$ sr$^{-1}$)')
-# plt.grid()
-# plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
-# plt.gcf().autofmt_xdate()
-# plt.legend()
-# plt.show()
+plt.figure(figsize=(15, 7))
+plt.plot(utc_times, cps)
+plt.xlabel("Time (UTC)")
+plt.ylabel('Counts per Second')
+plt.grid()
+plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+plt.gcf().autofmt_xdate()
+plt.legend()
+plt.show()
 
 asca_standard_particles =  {
     k: particles[k] for k in standard_asca if k in particles
@@ -661,7 +663,6 @@ asca_standard_particles =  {
 standard_asca_times = [v['time arrived'] for v in asca_standard_particles.values()]
 standard_asca_times = sorted(standard_asca_times)
 
-dtime = 50
 asca_cps = []
 asca_adjusted_times = []
 
@@ -687,27 +688,27 @@ while i < len(standard_asca_times):
 asca_cps = np.array(asca_cps)
 # ascaflux = asca_cps/6.23 # CONSTANT IS SUBJECT TO CHANGE
 
-# # Graph
-# asca_utc_times = [datetime.utcfromtimestamp(t) for t in asca_adjusted_times]
+# Graph
+asca_utc_times = [datetime.utcfromtimestamp(t) for t in asca_adjusted_times]
 
-# plt.figure(figsize=(15, 7))
-# plt.plot(asca_utc_times, ascaflux)
-# plt.xlabel("Time (UTC)")
-# plt.ylabel('Flux (cm$^{-2}$ s$^{-1}$ sr$^{-1}$)')
-# plt.grid()
-# plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
-# plt.gcf().autofmt_xdate()
-# plt.legend()
-# plt.show()
+plt.figure(figsize=(15, 7))
+plt.plot(asca_utc_times, asca_cps)
+plt.xlabel("Time (UTC)")
+plt.ylabel('Counts per Second')
+plt.grid()
+plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+plt.gcf().autofmt_xdate()
+plt.legend()
+plt.show()
 
-# # Overlapped
-# plt.figure(figsize=(15, 7))
-# plt.plot(utc_times, flux, label='All Particles', color = 'purple')
-# plt.plot(asca_utc_times, ascaflux, label="Standard ASCA", color = 'orange')
-# plt.xlabel("Time (UTC)")
-# plt.ylabel('Flux (cm$^{-2}$ s$^{-1}$ sr$^{-1}$)')
-# plt.grid()
-# plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
-# plt.gcf().autofmt_xdate()
-# plt.legend()
-# plt.show()
+# Overlapped
+plt.figure(figsize=(15, 7))
+plt.plot(utc_times, cps, label='All Particles', color = 'orange')
+plt.plot(asca_utc_times, asca_cps, label="Standard ASCA", color = 'purple', linestyle = 'dotted')
+plt.xlabel("Time (UTC)")
+plt.ylabel('Counts per Second')
+plt.grid()
+plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+plt.gcf().autofmt_xdate()
+plt.legend()
+plt.show()
