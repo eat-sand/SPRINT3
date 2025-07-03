@@ -523,6 +523,9 @@ plt.show()
 
 # Flux Calculations
 
+keylist = np.array(keylist)
+keylist_counts = keylist/0.3
+
 # Calculate the Counts per Second
 dtime = 50
 cps = []
@@ -530,16 +533,16 @@ adjusted_times = []
 
 i = 0
 while i < len(unix_epoch):
-    group_keys = [keylist[i]]
+    group_keys = [keylist_counts [i]]
     group_times = [unix_epoch[i]]
     j = i + 1
 
     while j < len(unix_epoch) and (unix_epoch[j] - unix_epoch[i]) < dtime:
-        group_keys.append(keylist[j])
+        group_keys.append(keylist_counts [j])
         group_times.append(unix_epoch[j])
         j += 1
 
-    cps_value = sum(group_keys) / dtime 
+    cps_value = sum(group_keys) / len(group_keys)
     avg_time = sum(group_times) / len(group_times)
 
     cps.append(cps_value)
@@ -594,7 +597,7 @@ while i < len(standard_asca_times):
 
 asca_cps = np.array(asca_cps)
 adjusted_time2 = np.array(asca_adjusted_times)
-ascaflux = asca_cps/6.23 # CONSTANT IS SUBJECT TO CHANGE
+ascaflux = asca_cps/6.23 
 
 # Graph
 asca_utc_times = [datetime.utcfromtimestamp(t) for t in asca_adjusted_times]

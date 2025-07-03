@@ -61,6 +61,8 @@ with open('ba-133-20-01-2025.txt', 'r') as file:
             unix_str = line.strip().split(': ')[-1]
             unix_str = float(unix_str)
 
+data = data[data[:, 2].argsort()]
+
 linear_pixel_coords = data[:,0]
 time_of_arrival = data[:,1]
 energy = data[:,3]
