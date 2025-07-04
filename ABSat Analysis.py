@@ -570,7 +570,6 @@ plt.show()
 # Flux for graded values
 
 standard_asca_times = [v['time'] for v in standard_asca.values()]
-standard_asca_times = sorted(standard_asca_times)
 
 dtime = 50
 asca_cps = []
