@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from collections import defaultdict
 from datetime import datetime
 import pytz
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 import matplotlib.dates as mdates
 
 # Plotting particles function
@@ -614,6 +614,32 @@ plt.show()
 plt.figure(figsize=(15, 7))
 plt.plot(utc_times, flux, label='All Particles', color = 'purple')
 plt.plot(asca_utc_times, ascaflux, linestyle='dotted', label="Standard ASCA", color = 'orange')
+plt.xlabel("Time (UTC)")
+plt.ylabel('Flux (cm$^{-2}$ s$^{-1}$ sr$^{-1}$)')
+plt.grid()
+plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+plt.gcf().autofmt_xdate()
+plt.legend()
+plt.show()
+
+# Graph zoomed in section between 21 and 22 UTC
+start_time = time(21, 0)
+end_time = time(22, 0)
+
+# Mask for All Particles
+mask_all = [(t.time() >= start_time) and (t.time() <= end_time) for t in utc_times]
+utc_times_filtered = [t for t, m in zip(utc_times, mask_all) if m]
+flux_filtered = [f for f, m in zip(flux, mask_all) if m]
+
+# Mask for Standard ASCA
+mask_asca = [(t.time() >= start_time) and (t.time() <= end_time) for t in asca_utc_times]
+asca_utc_times_filtered = [t for t, m in zip(asca_utc_times, mask_asca) if m]
+ascaflux_filtered = [f for f, m in zip(ascaflux, mask_asca) if m]
+
+# Plot
+plt.figure(figsize=(15, 7))
+plt.plot(utc_times_filtered, flux_filtered, label='All Particles', color='purple')
+plt.plot(asca_utc_times_filtered, ascaflux_filtered, linestyle='dotted', label="Standard ASCA", color='orange')
 plt.xlabel("Time (UTC)")
 plt.ylabel('Flux (cm$^{-2}$ s$^{-1}$ sr$^{-1}$)')
 plt.grid()
