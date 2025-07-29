@@ -6,6 +6,7 @@ from datetime import datetime
 import pytz
 from datetime import datetime, timedelta, time
 import matplotlib.dates as mdates
+from bisect import bisect_left, bisect_right
 
 # Plotting particles function
 def plot_cluster(x_vals, y_vals, e_vals, cluster_num):
@@ -647,3 +648,161 @@ plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
 plt.gcf().autofmt_xdate()
 plt.legend()
 plt.show()
+
+# Microburst Event Identification
+print("Microburst Event Identification")
+print("Split data into 10 min windows")
+
+dtime = 600  
+
+npunix = np.array(unix_epoch)
+
+start_time = npunix[0]
+end_time = npunix[-1]
+num_bins = int(np.ceil((end_time - start_time) / dtime))
+
+bin_indices = ((npunix - start_time) // dtime).astype(int)  
+
+grouped_unix = [[] for _ in range(num_bins)]
+grouped_FSPC = [[] for _ in range(num_bins)]
+
+for i in range(len(npunix)):
+    bin_idx = bin_indices[i]
+    grouped_unix[bin_idx].append(npunix[i])
+    grouped_FSPC[bin_idx].append(keylist_counts[i])
+
+# Caluclate the dispersion statistic
+background_times = []
+background_FSPC = []
+
+precip_times = []
+precip_FSPC = []
+
+for i in range(len(grouped_unix)):
+    group = grouped_FSPC[i]
+    var = np.var(group, ddof=1)
+    mean = np.mean(group)
+    N = len(group)
+
+    dispersion_stat = N / (N - 1) * (var / mean)
+
+    if dispersion_stat > 1.2:
+        precip_times.extend(grouped_unix[i])
+        precip_FSPC.extend(grouped_FSPC[i])
+    else:
+        background_times.append(grouped_unix[i])
+        background_FSPC.append(grouped_FSPC[i])
+
+# Identify Individual Mircroburst
+
+microburst_times = []
+microburst_counts = []
+smooth_times = []
+smooth_counts = []
+
+window_radius = 5  
+
+for i in range(len(precip_times)):
+    current_time = precip_times[i]
+    
+    t_min = current_time - window_radius
+    t_max = current_time + window_radius
+
+    start_idx = bisect_left(precip_times, t_min)
+    end_idx = bisect_right(precip_times, t_max)
+
+    window_counts = precip_FSPC[start_idx:end_idx]
+
+    if len(window_counts) == 0:
+        continue
+
+    sorted_counts = np.sort(window_counts)
+    bottom_half = sorted_counts[:len(sorted_counts)//2]
+    rolling_median = np.median(bottom_half)
+
+    spike_factor = (precip_FSPC[i] - rolling_median) / np.sqrt(rolling_median)
+
+    if spike_factor >= 8:
+        microburst_counts.append(precip_FSPC[i])
+        microburst_times.append(precip_times[i])
+
+    elif spike_factor <= 3:
+        smooth_counts.append(precip_FSPC[i])
+        smooth_times.append(precip_times[i])
+
+microburst_datetimes = [datetime.utcfromtimestamp(ts) for ts in microburst_times]
+smooth_datetimes = [datetime.utcfromtimestamp(ts) for ts in smooth_times]
+
+# Graph
+plt.figure(figsize=(15, 7))
+plt.plot(microburst_datetimes, microburst_counts, color='teal', label='Microburst')
+plt.plot(smooth_datetimes, smooth_counts, color='magenta', label='Smooth')
+plt.xlabel("Time (UTC)")
+plt.ylabel("Counts/50ms")
+plt.grid(True)
+plt.legend()
+plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
+plt.gcf().autofmt_xdate()
+plt.show()
+
+def group_events(times, counts, max_gap_seconds=1800):
+    """Group a time series into contiguous events separated by gaps > max_gap_seconds."""
+    events = []
+    event_times, event_counts = [times[0]], [counts[0]]
+
+    for t, c, t_prev in zip(times[1:], counts[1:], times[:-1]):
+        if (t - t_prev).seconds <= max_gap_seconds:
+            event_times.append(t)
+            event_counts.append(c)
+        else:
+            events.append({'times': event_times, 'counts': event_counts})
+            event_times, event_counts = [t], [c]
+
+    if event_times:
+        events.append({'times': event_times, 'counts': event_counts})
+    return events
+
+# Sort and Group
+microburst_sorted = sorted(zip(microburst_datetimes, microburst_counts))
+smooth_sorted = sorted(zip(smooth_datetimes, smooth_counts))
+
+if microburst_sorted:
+    microburst_datetimes_sorted, microburst_counts_sorted = zip(*microburst_sorted)
+    microburst_events = group_events(microburst_datetimes_sorted, microburst_counts_sorted)
+else:
+    microburst_events = []
+
+if smooth_sorted:
+    smooth_datetimes_sorted, smooth_counts_sorted = zip(*smooth_sorted)
+    smooth_events = group_events(smooth_datetimes_sorted, smooth_counts_sorted)
+else:
+    smooth_events = []
+
+def extract_overlap(times, counts, start, end):
+    return zip(*[(t, c) for t, c in zip(times, counts) if start <= t <= end])
+
+for i, micro in enumerate(microburst_events):
+    m_start, m_end = micro['times'][0], micro['times'][-1]
+
+    for j, smooth in enumerate(smooth_events):
+        s_start, s_end = smooth['times'][0], smooth['times'][-1]
+
+        overlap_start = max(m_start, s_start)
+        overlap_end = min(m_end, s_end)
+
+        if overlap_start < overlap_end:
+
+            m_times, m_counts = extract_overlap(micro['times'], micro['counts'], overlap_start, overlap_end)
+            s_times, s_counts = extract_overlap(smooth['times'], smooth['counts'], overlap_start, overlap_end)
+
+            if m_times and s_times:
+                plt.figure(figsize=(12, 4))
+                plt.plot(m_times, m_counts, color='teal', label='Microburst')
+                plt.plot(s_times, s_counts, color='magenta', label='Smooth')
+                plt.xlabel("Time (UTC)")
+                plt.ylabel("Counts/0.3s")
+                plt.grid(True)
+                plt.legend()
+                plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
+                plt.gcf().autofmt_xdate()
+                plt.show()
