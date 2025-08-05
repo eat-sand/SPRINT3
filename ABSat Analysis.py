@@ -84,7 +84,7 @@ def process_dict_files(folder_path, unix):
     return cluster_data, keylist
 
 # Load metadata and convert to UNIX time
-metadata = np.load(r'C:\Users\debbi\Desktop\ABsatBalloon\MediPixMetadata.npy', allow_pickle=True).item()
+metadata = np.load(r'file path', allow_pickle=True).item()
 epoch = metadata['epoch']
 
 local_tz = pytz.timezone("America/Edmonton")
@@ -92,7 +92,7 @@ utc_epoch = [local_tz.localize(t).astimezone(pytz.utc) for t in epoch]
 unix_epoch = [dt.timestamp() for dt in utc_epoch]
 
 # Load cluster data
-folder_path = r"C:\Users\debbi\Desktop\ABsatBalloon\ClassifiedForGrating"
+folder_path = r"file path"
 cluster_data, keylist = process_dict_files(folder_path, unix_epoch)
 
 # ACIS and ASCA grading outlines

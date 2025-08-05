@@ -111,7 +111,7 @@ def process_files_in_folder(folder_path):
     return pixel_coords_list, time_of_arrival_list, energy_list, unix_list
 
 # Load data
-folder_path = r"C:\Users\debbi\Desktop\Hardpix Files\22-05-2025"
+folder_path = r"file path"
 linear_pixel_coords, time_of_arrival, energy, unix_time = process_files_in_folder(folder_path)
 
 # Convert object arrays to flat NumPy arrays

@@ -95,7 +95,7 @@ def process_files_in_folder(folder_path):
     return pixel_coords_list, time_of_arrival_list, energy_list, unix_list
 
 # Load data
-folder_path = r"C:\Users\debbi\OneDrive\Desktop\Hardpix Files\07-03-2025 Long Run Files"
+folder_path = r"file path"
 linear_pixel_coords, time_of_arrival, energy, unix_time = process_files_in_folder(folder_path)
 
 linear_pixel_coords = np.concatenate(linear_pixel_coords)
